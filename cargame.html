@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retro Car Racer</title>
+    <style>
+        body {
+            margin: 0;
+            background: #222;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: white;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        #gameContainer {
+            position: relative;
+            text-align: center;
+        }
+        canvas {
+            border: 4px solid #fff;
+            background: #444;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+        #scoreBoard {
+            position: absolute;
+            top: 10px;
+            left: 15px;
+            font-size: 20px;
+            font-weight: bold;
+            text-shadow: 2px 2px black;
+            pointer-events: none;
+        }
+        #gameOverScreen {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.85);
+            padding: 20px 40px;
+            border: 2px solid red;
+            border-radius: 10px;
+        }
+        button {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            font-family: inherit;
+            margin-top: 10px;
+        }
+        button:hover { background: #218838; }
+    </style>
+</head>
+<body>
+
+<div id="gameContainer">
+    <div id="scoreBoard">Score: <span id="score">0</span></div>
+    <canvas id="gameCanvas" width="400" height="600"></canvas>
+    
+    <div id="gameOverScreen">
+        <h1 style="color: red; margin: 0 0 10px 0;">GAME OVER</h1>
+        <p>Final Score: <span id="finalScore">0</span></p>
+        <button onclick="resetGame()">Play Again</button>
+    </div>
+</div>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+const scoreEl = document.getElementById("score");
+const gameOverScreen = document.getElementById("gameOverScreen");
+const finalScoreEl = document.getElementById("finalScore");
+
+// Game Settings
+const trackWidth = 280;
+const trackLeft = (canvas.width - trackWidth) / 2;
+let gameSpeed = 5;
+let score = 0;
+let isGameOver = false;
+
+// Keys State
+const keys = { Left: false, Right: false };
+
+// Player Car
+const player = {
+    x: canvas.width / 2 - 20,
+    y: canvas.height - 100,
+    width: 40,
+    height: 70,
+    color: "#ff3333",
+    speed: 6
+};
+
+// Obstacles
+let obstacles = [];
+const obstacleSpawnInterval = 90; // frames
+let frameCount = 0;
+
+// Track lines scrolling
+let lineOffset = 0;
+
+// Event Listeners
+window.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") keys.Left = true;
+    if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") keys.Right = true;
+});
+
+window.addEventListener("keyup", (e) => {
+    if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") keys.Left = false;
+    if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") keys.Right = false;
+});
+
+function spawnObstacle() {
+    const width = 40;
+    const height = 70;
+    // Spawn randomly within the track boundaries
+    const minX = trackLeft + 10;
+    const maxX = trackLeft + trackWidth - width - 10;
+    const x = Math.floor(Math.random() * (maxX - minX + 1)) + minX;
+    
+    obstacles.push({ x: x, y: -height, width: width, height: height, color: "#3385ff" });
+}
+
+function checkCollision(rect1, rect2) {
+    return rect1.x < rect2.x + rect2.width &&
+           rect1.x + rect1.width > rect2.x &&
+           rect1.y < rect2.y + rect2.height &&
+           rect1.y + rect1.height > rect2.y;
+}
+
+function update() {
+    if (isGameOver) return;
+
+    frameCount++;
+    
+    // Move Player (Keep inside track)
+    if (keys.Left && player.x > trackLeft + 5) {
+        player.x -= player.speed;
+    }
+    if (keys.Right && player.x < trackLeft + trackWidth - player.width - 5) {
+        player.x += player.speed;
+    }
+
+    // Move Track Lines
+    lineOffset += gameSpeed;
+    if (lineOffset >= 40) lineOffset = 0;
+
+    // Spawn & Move Obstacles
+    if (frameCount % obstacleSpawnInterval === 0) {
+        spawnObstacle();
+    }
+
+    for (let i = obstacles.length - 1; i >= 0; i--) {
+        obstacles[i].y += gameSpeed;
+
+        // Collision Check
+        if (checkCollision(player, obstacles[i])) {
+            endGame();
+        }
+
+        // Remove off-screen obstacles and update score
+        if (obstacles[i].y > canvas.height) {
+            obstacles.splice(i, 1);
+            score += 10;
+            scoreEl.innerText = score;
+            
+            // Slowly increase speed as score goes up
+            if (score % 50 === 0) gameSpeed += 0.5;
+        }
+    }
+}
+
+function drawCar(car) {
+    // Main Body
+    ctx.fillStyle = car.color;
+    ctx.fillRect(car.x, car.y, car.width, car.height);
+
+    // Wheels (Black rectangles)
+    ctx.fillStyle = "#111";
+    ctx.fillRect(car.x - 4, car.y + 10, 4, 15); // Top Left
+    ctx.fillRect(car.x + car.width, car.y + 10, 4, 15); // Top Right
+    ctx.fillRect(car.x - 4, car.y + 45, 4, 15); // Bottom Left
+    ctx.fillRect(car.x + car.width, car.y + 45, 4, 15); // Bottom Right
+    
+    // Windshield
+    ctx.fillStyle = "#e0f7fa";
+    ctx.fillRect(car.x + 5, car.y + 25, car.width - 10, 12);
+}
+
+function draw() {
+    // Clear Canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw Grass/Shoulders
+    ctx.fillStyle = "#2ed573";
+    ctx.fillRect(0, 0, trackLeft, canvas.height);
+    ctx.fillRect(trackLeft + trackWidth, 0, canvas.width - (trackLeft + trackWidth), canvas.height);
+
+    // Draw Road Track
+    ctx.fillStyle = "#555555";
+    ctx.fillRect(trackLeft, 0, trackWidth, canvas.height);
+
+    // Draw Track Borders
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(trackLeft - 5, 0, 5, canvas.height);
+    ctx.fillRect(trackLeft + trackWidth, 0, 5, canvas.height);
+
+    // Draw Center Dashed Line
+    ctx.fillStyle = "#ffffff";
+    for (let y = -40 + lineOffset; y < canvas.height; y += 40) {
+        ctx.fillRect(canvas.width / 2 - 2, y, 4, 20);
+    }
+
+    // Draw Player
+    drawCar(player);
+
+    // Draw Obstacles
+    obstacles.forEach(obs => drawCar(obs));
+}
+
+function gameLoop() {
+    update();
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+
+function endGame() {
+    isGameOver = true;
+    finalScoreEl.innerText = score;
+    gameOverScreen.style.display = "block";
+}
+
+function resetGame() {
+    obstacles = [];
+    score = 0;
+    gameSpeed = 5;
+    player.x = canvas.width / 2 - 20;
+    scoreEl.innerText = score;
+    isGameOver = false;
+    gameOverScreen.style.display = "none";
+}
+
+// Start the engine!
+gameLoop();
+</script>
+
+</body>
+</html>
